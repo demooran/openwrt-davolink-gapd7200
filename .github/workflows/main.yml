@@ -1,7 +1,7 @@
-Name: Build Custom OpenWrt & Merge Full Flash Dump
+name: Build Custom OpenWrt & Merge Full Flash Dump
 
 on:
-  workflow_dispatch: # تشغيل يدوي بضغطة زر
+  workflow_dispatch:
 
 jobs:
   build_and_merge:
@@ -35,20 +35,17 @@ jobs:
 
     - name: Inject Custom Board Map & Settings
       run: |
-        # 1. إنشاء مجلد خريطة العتاد ونسخ ملف الـ DTS إذا كان موجوداً
         mkdir -p openwrt/target/linux/ipq40xx/files/arch/arm/boot/dts/
         if [ -f "target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-gapd7200.dts" ]; then
           cp target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-gapd7200.dts openwrt/target/linux/ipq40xx/files/arch/arm/boot/dts/
         fi
         
-        # 2. جلب ودمج مجلد الـ files المخصص من مستودعك (الملفات التي رفعتها بالمتصفح)
         if [ -d "files" ]; then
-          echo "تم العثور على مجلد files المخصص، جاري دمجه مع السوفت وير..."
+          echo "تم العثور على مجلد files المخصص..."
           mkdir -p openwrt/files
           cp -r files/* openwrt/files/
         fi
-
-        # 3. حقن وتعديل الـ Makefile لإدراج جهاز Davolink GAPD-7200 رسمياً
+        
         echo -e '\n\ndefine Device/davolink_gapd-7200\n\t$(call Device/CcNewifiNetgear)\n\tDEVICE_VENDOR := Davolink\n\tDEVICE_MODEL := GAPD-7200\n\tDEVICE_DTS := qcom-ipq4019-gapd7200\n\tKERNEL_SIZE := 4096k\n\tIMAGE_SIZE := 122880k\n\tBLOCKSIZE := 128k\n\tPAGESIZE := 2048\n\tIMAGES := sysupgrade.bin\nendef\nTARGET_DEVICES += davolink_gapd-7200' >> openwrt/target/linux/ipq40xx/image/generic.mk
 
     - name: Load Config Seed
@@ -57,18 +54,13 @@ jobs:
         CONFIG_TARGET_ipq40xx=y
         CONFIG_TARGET_ipq40xx_generic=y
         CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_davolink_gapd-7200=y
-
-        # واجهة التحكم الرسومية المتقدمة LuCI
         CONFIG_PACKAGE_luci=y
         CONFIG_PACKAGE_luci-ssl=y
-
-        # دمج الميزات المطلوبة للشبكة
         CONFIG_PACKAGE_kmod-eoip=y
         CONFIG_PACKAGE_lldpd=y
         CONFIG_PACKAGE_luci-app-watchcat=y
         CONFIG_PACKAGE_luci-app-ttyd=y
         EOF
-        
         cd openwrt
         make defconfig
 
@@ -77,8 +69,36 @@ jobs:
         cd openwrt
         make -j$(nproc) || make -j1 V=s
 
-    - name: Upload Custom Firmware (الملف الصافي للتحديث)
+    - name: List Build Output
+      if: always()
+      run: |
+        echo "═══════ محتوى مجلد الإخراج ═══════"
+        ls -lah openwrt/bin/targets/ipq40xx/generic/ 2>/dev/null || echo "المجلد غير موجود!"
+        echo ""
+        echo "═══════ جميع الملفات ═══════"
+        find openwrt/bin/targets/ -type f 2>/dev/null | head -30
+
+    - name: Upload Custom Firmware (All Images)
+      if: always()
       uses: actions/upload-artifact@v4
       with:
         name: OpenWrt-Davolink-GAPD7200-Firmware
-        path: openwrt/bin/targets/ipq40xx/generic/*sysupgrade.bin
+        path: |
+          openwrt/bin/targets/ipq40xx/generic/*.bin
+          openwrt/bin/targets/ipq40xx/generic/*.itb
+          openwrt/bin/targets/ipq40xx/generic/*.ubi
+          openwrt/bin/targets/ipq40xx/generic/*.tar.gz
+        if-no-files-found: warn
+        retention-days: 90
+
+    - name: Upload Build Logs (on failure)
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: Build-Logs
+        path: |
+          openwrt/logs/
+          openwrt/.config
+          openwrt/tmp/*.log
+        if-no-files-found: ignore
+        retention-days: 30
