@@ -63,6 +63,9 @@ jobs:
         cd openwrt
         make defconfig
 
+        echo "CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_davolink_gapd-7200=y" >> .config
+        grep "davolink" .config || echo "NOT FOUND"
+
     - name: Compile Custom Firmware
       run: |
         cd openwrt
