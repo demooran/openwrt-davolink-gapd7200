@@ -36,6 +36,8 @@ jobs:
     - name: Inject Custom Board Map & Settings
       run: |
         mkdir -p openwrt/target/linux/ipq40xx/files/arch/arm/boot/dts/
+        cp target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-gapd7200.dts openwrt/target/linux/ipq40xx/files/arch/arm/boot/dts/ 2>/dev/null || echo "DTS source not found"
+        ls -la openwrt/target/linux/ipq40xx/files/arch/arm/boot/dts/
         
         if [ -d "files" ]; then
           echo "تم العثور على مجلد files المخصص..."
