@@ -44,10 +44,8 @@ jobs:
           echo "تم العثور على مجلد files المخصص..."
           mkdir -p openwrt/files
           cp -r files/* openwrt/files/
+        bash -c "printf '\n' >> openwrt/target/linux/ipq40xx/image/generic.mk; cat src/generic-extra.mk >> openwrt/target/linux/ipq40xx/image/generic.mk"
         fi
-        cp files/generic-extra.mk openwrt/files/ 2>/dev/null || true
-        echo "" >> openwrt/target/linux/ipq40xx/image/generic.mk
-        cat files/generic-extra.mk >> openwrt/target/linux/ipq40xx/image/generic.mk
         
 
     - name: Load Config Seed
