@@ -2,7 +2,6 @@ define Device/davolink_gapd-7200
 	DEVICE_VENDOR := Davolink
 	DEVICE_MODEL := GAPD-7200
 	DEVICE_DTS := qcom-ipq4019-gapd7200
-	DEVICE_DTS_CONFIG := config@cp01
 	SOC := qcom-ipq4019
 	KERNEL_SIZE := 4096k
 	IMAGE_SIZE := 122880k
