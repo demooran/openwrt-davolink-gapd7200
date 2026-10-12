@@ -43,8 +43,13 @@ jobs:
           echo "تم العثور على مجلد files المخصص..."
           mkdir -p openwrt/files
           cp -r files/* openwrt/files/
-        bash -c "printf '\n' >> openwrt/target/linux/ipq40xx/image/generic.mk; cat src/generic-extra.mk >> openwrt/target/linux/ipq40xx/image/generic.mk"
         fi
+        echo "" >> openwrt/target/linux/ipq40xx/image/generic.mk
+        cat "$(pwd)/src/generic-extra.mk" >> openwrt/target/linux/ipq40xx/image/generic.mk
+        echo "═══ DAVOLINK CHECK ═══"
+        grep -n "davolink" openwrt/target/linux/ipq40xx/image/generic.mk || echo "NOT FOUND"
+        echo "═══ TAIL ═══"
+        tail -25 openwrt/target/linux/ipq40xx/image/generic.mk
         
 
     - name: Load Config Seed
