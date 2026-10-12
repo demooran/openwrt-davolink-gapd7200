@@ -1,0 +1,58 @@
+#!/bin/sh
+
+uci set system.@system[0].hostname='GAPD-7200'
+uci set system.@system[0].description='DAVOLINK GAPD-7200'
+uci set system.@system[0].zonename='UTC'
+uci set system.@system[0].timezone='UTC'
+
+uci set network.lan.type='bridge'
+uci -q delete network.lan.ifname
+uci -q delete network.lan.device
+uci add_list network.lan.ifname='lan1'
+uci add_list network.lan.ifname='lan2'
+uci add_list network.lan.ifname='lan3'
+uci add_list network.lan.ifname='lan4'
+uci add_list network.lan.ifname='wan'
+uci set network.lan.proto='dhcp'
+uci -q delete network.lan.ipaddr
+uci -q delete network.lan.netmask
+
+uci -q delete network.wan
+uci -q delete network.wan6
+uci set dhcp.lan.ignore='1'
+uci -q delete firewall.wan
+
+uci set wireless.radio0.country='IN'
+uci set wireless.radio0.txpower='30'
+uci set wireless.radio0.disabled='0'
+uci set wireless.radio0.channel='1'
+uci set wireless.radio0.htmode='HT20'
+
+uci -q delete wireless.default_radio0
+uci set wireless.default_radio0=wifi-iface
+uci set wireless.default_radio0.device='radio0'
+uci set wireless.default_radio0.mode='ap'
+uci set wireless.default_radio0.ssid='HorusPro-2.4G'
+uci set wireless.default_radio0.network='lan'
+uci set wireless.default_radio0.encryption='none'
+
+uci set wireless.radio1.country='IN'
+uci set wireless.radio1.txpower='30'
+uci set wireless.radio1.disabled='0'
+uci set wireless.radio1.channel='44'
+uci set wireless.radio1.htmode='VHT80'
+
+uci -q delete wireless.default_radio1
+uci set wireless.default_radio1=wifi-iface
+uci set wireless.default_radio1.device='radio1'
+uci set wireless.default_radio1.mode='ap'
+uci set wireless.default_radio1.ssid='HorusPro-5G'
+uci set wireless.default_radio1.network='lan'
+uci set wireless.default_radio1.encryption='none'
+
+uci set luci.main.lang='ar'
+uci set luci.main.mediaurlbase='/luci-static/argon'
+
+uci commit
+
+exit 0
