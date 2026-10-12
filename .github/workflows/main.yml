@@ -74,6 +74,14 @@ jobs:
         echo "CONFIG_TARGET_ipq40xx_generic_DEVICE_davolink_gapd-7200=y" >> .config
         grep "davolink" .config || echo "NOT FOUND"
 
+    - name: Debug Kernel Images
+      run: |
+          find openwrt/build_dir -type f \
+            \( -name  *gapd*kernel*  -o -name  *gapd*.dtb  \) \
+            -print
+          grep -n -A20 -B5  Device/davolink_gapd-7200  \
+            openwrt/target/linux/ipq40xx/image/generic.mk
+            
     - name: Compile Custom Firmware
       run: |
         cd openwrt
