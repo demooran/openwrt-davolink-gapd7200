@@ -57,7 +57,7 @@ jobs:
         cat << 'EOF' > openwrt/.config
         CONFIG_TARGET_ipq40xx=y
         CONFIG_TARGET_ipq40xx_generic=y
-        CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_davolink_gapd-7200=y
+        CONFIG_TARGET_ipq40xx_generic_DEVICE_davolink_gapd-7200=y
         CONFIG_PACKAGE_luci=y
         CONFIG_PACKAGE_luci-ssl=y
         CONFIG_PACKAGE_kmod-eoip=y
@@ -68,7 +68,7 @@ jobs:
         cd openwrt
         make defconfig
 
-        echo "CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_davolink_gapd-7200=y" >> .config
+        echo "CONFIG_TARGET_ipq40xx_generic_DEVICE_davolink_gapd-7200=y" >> .config
         grep "davolink" .config || echo "NOT FOUND"
 
     - name: Compile Custom Firmware
