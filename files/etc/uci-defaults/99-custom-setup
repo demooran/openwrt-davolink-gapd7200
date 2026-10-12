@@ -1,0 +1,16 @@
+#!/bin/sh
+uci set system.@system[0].hostname='GAPD-7200'
+uci set system.@system[0].zonename='UTC'
+uci set network.lan.type='bridge'
+uci -q delete network.lan.ifname
+uci add_list network.lan.ifname='lan1'
+uci add_list network.lan.ifname='lan2'
+uci add_list network.lan.ifname='lan3'
+uci add_list network.lan.ifname='lan4'
+uci add_list network.lan.ifname='wan'
+uci set network.lan.proto='dhcp'
+uci set dhcp.lan.ignore='1'
+uci set luci.main.lang='ar'
+uci set luci.main.mediaurlbase='/luci-static/argon'
+uci commit
+exit 0
