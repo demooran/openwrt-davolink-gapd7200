@@ -155,7 +155,7 @@ jobs:
       - name: Register Davolink image definition
         working-directory: openwrt
         shell: bash
-        run: ../scripts/register-davolink-device.sh
+        run: bash ../scripts/register-davolink-device.sh
 
       # --------------------------------------------------
       # 9. Check image helper definitions
@@ -365,7 +365,7 @@ jobs:
         if: always()
         working-directory: openwrt
         shell: bash
-        run: ../scripts/list-generated-images.sh
+        run: bash ../scripts/list-generated-images.sh
 
       # --------------------------------------------------
       # 18. Upload artifacts and logs
