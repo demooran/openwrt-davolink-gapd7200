@@ -9,6 +9,6 @@ define Device/davolink_gapd-7200
 	BLOCKSIZE := 128k
 	PAGESIZE := 2048
 	IMAGES := sysupgrade.bin
-	IMAGE/sysupgrade.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-rootfs | pad-rootfs | check-size | append-metadata
-endef
+    IMAGE/sysupgrade.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-rootfs | pad-rootfs | append-metadata | check-size
+	endef
 TARGET_DEVICES += davolink_gapd-7200
