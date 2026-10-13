@@ -20,13 +20,13 @@ jobs:
 
     steps:
       # --------------------------------------------------
-      # 1. Checkout your repository
+      # 1. Checkout repository
       # --------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
       # --------------------------------------------------
-      # 2. Install build dependencies
+      # 2. Install dependencies
       # --------------------------------------------------
       - name: Install build dependencies
         run: |
@@ -46,7 +46,6 @@ jobs:
             libncurses-dev \
             libssl-dev \
             python3 \
-            python3-distutils \
             python3-setuptools \
             rsync \
             swig \
@@ -56,7 +55,6 @@ jobs:
             wget \
             curl \
             time \
-            ccache \
             device-tree-compiler \
             libelf-dev \
             ecj \
@@ -74,97 +72,98 @@ jobs:
             https://github.com/openwrt/openwrt.git \
             openwrt
 
+          echo "OpenWrt source downloaded."
+
       # --------------------------------------------------
-      # 4. Update and install feeds
+      # 4. Update feeds
       # --------------------------------------------------
-      - name: Update feeds
+      - name: Update and install feeds
         working-directory: openwrt
         run: |
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
       # --------------------------------------------------
-      # 5. Inspect repository files
+      # 5. Inspect repository
       # --------------------------------------------------
-      - name: Inspect Davolink source files
+      - name: Inspect repository files
+        shell: bash
         run: |
-          echo "=========================================="
-          echo "Repository source files"
-          echo "=========================================="
+          set -eu
 
-          echo "Current repository:"
-          pwd
+          echo "=== Repository files ==="
+          find . -maxdepth 3 -type f -print | head -n 200
 
-          echo "Files in src:"
+          echo "=== src directory ==="
+
           if [ -d src ]; then
             find src -maxdepth 2 -type f -print
           else
-            echo "ERROR: src directory does not exist"
+            echo "ERROR: src directory not found."
             exit 1
           fi
 
-          echo "Device tree source files:"
+          echo "=== DTS files ==="
+
           find target/linux/ipq40xx/files/arch/arm/boot/dts \
             -type f -print 2>/dev/null || true
 
-          echo "=========================================="
-
       # --------------------------------------------------
-      # 6. Install the Davolink DTS
+      # 6. Install GAPD-7200 device tree
       # --------------------------------------------------
       - name: Install Davolink device tree
+        shell: bash
         run: |
-          set -eu
+          set -euo pipefail
 
-          DTS_SOURCE=""
+          DTS_DIR="target/linux/ipq40xx/files/arch/arm/boot/dts"
 
-          # Look for a GAPD-7200 device tree in the repository.
-          DTS_SOURCE="$(find target/linux/ipq40xx/files/arch/arm/boot/dts \
-            -type f \
-            \( -iname  *gapd*7200*.dts  \
-            -o -iname  *gapd*7200*.dtsi  \) \
-            -print -quit 2>/dev/null || true)"
-
-          if [ -z "$DTS_SOURCE" ]; then
-            echo "ERROR: No GAPD-7200 DTS/DTSI file found."
-            echo "Available DTS files:"
-            find target/linux/ipq40xx/files/arch/arm/boot/dts \
-              -type f -print 2>/dev/null || true
+          if [ ! -d "$DTS_DIR" ]; then
+            echo "ERROR: Repository DTS directory not found:"
+            echo "$DTS_DIR"
             exit 1
           fi
 
-          DTS_NAME="$(basename "$DTS_SOURCE")"
+          DTS_SOURCE="$(
+            find "$DTS_DIR" -type f \
+              -name  qcom-ipq4019-gapd7200.dts  \
+              -print -quit
+          )"
 
-          echo "Found device tree: $DTS_SOURCE"
-
-          DEST="openwrt/target/linux/ipq40xx/files/arch/arm/boot/dts/$DTS_NAME"
-
-          mkdir -p "$(dirname "$DEST")"
-          cp "$DTS_SOURCE" "$DEST"
-
-          echo "Installed DTS: $DEST"
-
-          # Verify that the board identity appears in the file.
-          if ! grep -qi  gapd-7200  "$DEST"; then
-            echo "WARNING: GAPD-7200 was not found in the DTS filename/content."
-            echo "Review the device tree before using the firmware."
+          if [ -z "$DTS_SOURCE" ]; then
+            echo "ERROR: qcom-ipq4019-gapd7200.dts was not found."
+            find "$DTS_DIR" -type f -print
+            exit 1
           fi
 
+          DTS_DEST="openwrt/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-gapd7200.dts"
+
+          mkdir -p "$(dirname "$DTS_DEST")"
+          cp "$DTS_SOURCE" "$DTS_DEST"
+
+          echo "DTS copied:"
+          echo "$DTS_DEST"
+
+          echo "=== Verify board compatibility string ==="
+
+          grep -n -i -E \
+             model|compatible|gapd-7200  \
+            "$DTS_DEST" || true
+
       # --------------------------------------------------
-      # 7. Install repository overlay files
+      # 7. Install filesystem overlay
       # --------------------------------------------------
       - name: Install filesystem overlay
+        shell: bash
         run: |
-          set -eu
+          set -euo pipefail
 
           if [ -d files ]; then
-            echo "Installing files/ overlay"
-
+            mkdir -p openwrt/files
             cp -a files/. openwrt/files/
-
-            echo "Overlay installed."
+            echo "Filesystem overlay installed."
           else
-            echo "No files/ overlay directory found; skipping."
+            echo "No files/ directory; skipping overlay."
           fi
 
       # --------------------------------------------------
@@ -172,96 +171,135 @@ jobs:
       # --------------------------------------------------
       - name: Register Davolink image definition
         working-directory: openwrt
+        shell: bash
         run: |
-          set -eu
+          set -euo pipefail
 
           EXTRA_FILE="../src/generic-extra.mk"
           IMAGE_FILE="target/linux/ipq40xx/image/generic.mk"
 
-          echo "Checking image definition files..."
+          echo "=== Check image definition source ==="
 
           if [ ! -f "$EXTRA_FILE" ]; then
-            echo "ERROR: $EXTRA_FILE not found."
+            echo "ERROR: $EXTRA_FILE does not exist."
             exit 1
           fi
+
+          echo "=== Source definition contents ==="
+          cat "$EXTRA_FILE"
+
+          echo "=== Check upstream image file ==="
 
           if [ ! -f "$IMAGE_FILE" ]; then
-            echo "ERROR: $IMAGE_FILE not found."
-            find target/linux/ipq40xx/image -maxdepth 2 -type f -print
+            echo "ERROR: $IMAGE_FILE does not exist."
+            find target/linux/ipq40xx/image \
+              -maxdepth 2 -type f -print
             exit 1
           fi
 
-          echo "Checking for an existing Davolink profile..."
+          echo "=== Register device definition ==="
 
           if grep -R -q \
              Device/davolink_gapd-7200  \
             target/linux/ipq40xx/image \
             --include= *.mk ; then
 
-            echo "A Davolink device definition already exists."
-            echo "Will not append a duplicate definition."
+            echo "Device definition already exists."
 
           else
-            echo "Appending src/generic-extra.mk to generic.mk"
-
+            printf  \n\n  >> "$IMAGE_FILE"
             cat "$EXTRA_FILE" >> "$IMAGE_FILE"
+            echo "Device definition appended to generic.mk."
           fi
 
-          echo "Checking the registered definition..."
+          echo "=== Verify device definition ==="
 
           grep -R -n -A 15 -B 3 \
              Device/davolink_gapd-7200  \
             target/linux/ipq40xx/image \
-            --include= *.mk  || true
+            --include= *.mk 
 
-          echo "Checking TARGET_DEVICES registration..."
+          echo "=== Verify TARGET_DEVICES ==="
 
           grep -R -n \
              TARGET_DEVICES.*davolink_gapd-7200  \
             target/linux/ipq40xx/image \
-            --include= *.mk  || true
+            --include= *.mk 
 
       # --------------------------------------------------
-      # 9. Inspect the target image infrastructure
+      # 9. Inspect OpenWrt image infrastructure
       # --------------------------------------------------
-      - name: Inspect target image infrastructure
+      - name: Inspect image infrastructure
         working-directory: openwrt
+        shell: bash
         run: |
-          echo "=========================================="
-          echo "Target image infrastructure"
-          echo "=========================================="
+          echo "=== Image Makefiles ==="
 
-          echo "Image Makefiles:"
           find target/linux/ipq40xx/image \
-            -maxdepth 2 \
-            -type f \
-            -name  *.mk  \
-            -print
+            -maxdepth 2 -type f -name  *.mk  -print
 
-          echo "Device helper definitions:"
+          echo "=== Device image helpers ==="
+
           grep -R -n \
              Device/FitImageLzma  \
-            target/linux/ipq40xx/image \
             target/linux/ipq40xx \
             --include= *.mk  || true
 
-          echo "Image size helper definitions:"
-          grep -R -n \
-             check-size  \
+          echo "=== Kernel and rootfs image rules ==="
+
+          grep -R -n -E \
+             append-kernel|append-rootfs|pad-to|check-size|append-metadata  \
             target/linux/ipq40xx/image \
             --include= *.mk  || true
 
-          echo "=========================================="
+      # --------------------------------------------------
+      # 10. Check DTS build integration
+      # --------------------------------------------------
+      - name: Check DTS integration
+        working-directory: openwrt
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          DTS_FILE="target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-gapd7200.dts"
+
+          if [ ! -f "$DTS_FILE" ]; then
+            echo "ERROR: DTS file is missing."
+            exit 1
+          fi
+
+          echo "=== Check target DTS references ==="
+
+          grep -R -n \
+             qcom-ipq4019-gapd7200  \
+            target/linux/ipq40xx \
+            --include= *.mk  \
+            --include= Makefile  || true
+
+          echo "The DTS exists, but a target reference must also be verified."
 
       # --------------------------------------------------
-      # 10. Configure the target
+      # 11. Configure OpenWrt
       # --------------------------------------------------
       - name: Configure OpenWrt target
         working-directory: openwrt
+        shell: bash
         run: |
-          set -eu
+          set -euo pipefail
 
-          echo "Selecting ipq40xx/generic target..."
+          echo "=== Check device registration before defconfig ==="
+
+          grep -R -n \
+             Device/davolink_gapd-7200  \
+            target/linux/ipq40xx/image \
+            --include= *.mk 
+
+          grep -R -n \
+             TARGET_DEVICES.*davolink_gapd-7200  \
+            target/linux/ipq40xx/image \
+            --include= *.mk 
+
+          echo "=== Create initial configuration ==="
 
           cat > .config << EOF 
           CONFIG_TARGET_ipq40xx=y
@@ -269,48 +307,51 @@ jobs:
           CONFIG_TARGET_ipq40xx_generic_DEVICE_davolink_gapd-7200=y
           EOF
 
-          echo "Initial device configuration:"
-          cat .config
-
-          echo "Running make defconfig..."
+          echo "=== Run make defconfig ==="
 
           make defconfig
 
-          echo "Configuration after make defconfig:"
+          echo "=== Configuration after defconfig ==="
+
           grep -E \
-             CONFIG_TARGET_ipq40xx|CONFIG_TARGET_SUBTARGET|CONFIG_TARGET_DEVICE  \
+             ^CONFIG_TARGET_ipq40xx|^CONFIG_TARGET_SUBTARGET  \
             .config || true
 
       # --------------------------------------------------
-      # 11. Debug device registration
+      # 12. Registration diagnostics
       # --------------------------------------------------
       - name: Debug Davolink device registration
         if: always()
         working-directory: openwrt
+        shell: bash
         run: |
           echo "=========================================="
           echo "Davolink registration diagnostics"
           echo "=========================================="
 
-          echo "Device definition:"
+          echo "=== Device definition ==="
+
           grep -R -n -A 15 -B 5 \
              davolink_gapd-7200  \
             target/linux/ipq40xx/image \
             target/linux/ipq40xx/Makefile \
             --include= *.mk  || true
 
-          echo "DTS files:"
+          echo "=== DTS files ==="
+
           find target/linux/ipq40xx \
             -type f \
             \( -iname  *gapd*7200*  -o -iname  *horuspro*  \) \
             -print || true
 
-          echo "Device configuration:"
+          echo "=== Device configuration ==="
+
           grep \
              CONFIG_TARGET_ipq40xx_generic_DEVICE_davolink_gapd-7200  \
             .config || true
 
-          echo "Image definitions:"
+          echo "=== Image definitions ==="
+
           grep -R -n \
              TARGET_DEVICES.*davolink_gapd-7200  \
             target/linux/ipq40xx/image \
@@ -319,79 +360,77 @@ jobs:
           echo "=========================================="
 
       # --------------------------------------------------
-      # 12. Validate the device configuration
+      # 13. Validate device configuration
       # --------------------------------------------------
       - name: Validate Davolink configuration
         working-directory: openwrt
+        shell: bash
         run: |
-          set -eu
+          set -euo pipefail
 
           if ! grep -q \
              ^CONFIG_TARGET_ipq40xx_generic_DEVICE_davolink_gapd-7200=y$  \
             .config; then
 
             echo "ERROR: Davolink device profile was removed by make defconfig."
+            echo "The device profile is not recognized by the generated configuration."
             echo "Check the registration diagnostics above."
-            echo "The device profile must be recognized before compilation."
             exit 1
           fi
 
-          echo "Davolink device profile is enabled."
+          echo "Davolink profile is enabled."
 
       # --------------------------------------------------
-      # 13. Download sources
+      # 14. Download sources
       # --------------------------------------------------
       - name: Download package sources
         working-directory: openwrt
+        shell: bash
         run: |
           make download -j8
 
       # --------------------------------------------------
-      # 14. Compile OpenWrt
+      # 15. Compile firmware
       # --------------------------------------------------
       - name: Compile OpenWrt
         id: compile
         continue-on-error: true
         working-directory: openwrt
+        shell: bash
         run: |
           set -o pipefail
-
           make -j1 V=s 2>&1 | tee build.log
 
       # --------------------------------------------------
-      # 15. Display build errors
+      # 16. Show build errors
       # --------------------------------------------------
       - name: Show Build Errors
         if: always()
         working-directory: openwrt
+        shell: bash
         run: |
-          echo "=========================================="
-          echo "Build log diagnostics"
-          echo "=========================================="
+          echo "=== Build errors ==="
 
           if [ -f build.log ]; then
-            echo "Searching for errors..."
-
             grep -n -i -E \
-               error:|fatal error:|undefined reference|No rule to make target|recipe for target|Error [0-9]|failed  \
+               error:|fatal error:|undefined reference|No rule to make target|Error [0-9]|failed  \
               build.log | tail -n 100 || true
 
-            echo "Last 150 lines of build.log:"
+            echo "=== Last 150 lines ==="
             tail -n 150 build.log
           else
             echo "build.log does not exist."
           fi
 
-          echo "=========================================="
-
       # --------------------------------------------------
-      # 16. List generated images
+      # 17. List generated images
       # --------------------------------------------------
       - name: List generated images
         if: always()
         working-directory: openwrt
+        shell: bash
         run: |
-          echo "Generated target files:"
+          echo "=== Generated images ==="
 
           find bin/targets/ipq40xx/generic \
             -maxdepth 2 \
@@ -399,7 +438,7 @@ jobs:
             -printf  %p (%s bytes)\n  2>/dev/null || true
 
       # --------------------------------------------------
-      # 17. Upload build artifacts and logs
+      # 18. Upload logs and artifacts
       # --------------------------------------------------
       - name: Upload build artifacts and logs
         if: always()
@@ -413,10 +452,11 @@ jobs:
             openwrt/.config
 
       # --------------------------------------------------
-      # 18. Report compilation result
+      # 19. Report final result
       # --------------------------------------------------
       - name: Check compilation result
         if: always()
+        shell: bash
         run: |
           if [ "${{ steps.compile.outcome }}" != "success" ]; then
             echo "ERROR: OpenWrt compilation failed."
