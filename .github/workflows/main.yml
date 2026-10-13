@@ -1,4 +1,4 @@
-name: Build Custom OpenWrt & Merge Full Flash Dump
+name: Build Custom OpenWrt - DAVOLINK GAPD-7200
 
 on:
   workflow_dispatch:
@@ -12,6 +12,7 @@ jobs:
     timeout-minutes: 360
 
     steps:
+
       # ==========================================
       # 1. Checkout Repository
       # ==========================================
@@ -19,7 +20,7 @@ jobs:
         uses: actions/checkout@v4
 
       # ==========================================
-      # 2. Initialize Build Dependencies
+      # 2. Install Build Dependencies
       # ==========================================
       - name: Initialize Environment Dependencies
         env:
@@ -41,12 +42,12 @@ jobs:
             msmtp nano p7zip-full patch pkgconf python3 \
             python3-pip qemu-utils rsync scons squashfs-tools \
             subversion swig texinfo u-boot-tools unzip xmlto \
-            xz-utils zlib1g-dev libz-dev time xxd
+            xz-utils zlib1g-dev time xxd
 
           sudo apt-get clean
 
       # ==========================================
-      # 3. Clone OpenWrt
+      # 3. Clone OpenWrt 23.05
       # ==========================================
       - name: Clone OpenWrt Source Code
         run: |
@@ -60,11 +61,11 @@ jobs:
 
           cd openwrt
 
-          echo "=== OpenWrt version ==="
+          echo "===== OpenWrt revision ====="
           git log -1 --oneline
 
       # ==========================================
-      # 4. Update Feeds
+      # 4. Update and Install Feeds
       # ==========================================
       - name: Update & Install Feeds
         run: |
@@ -76,47 +77,47 @@ jobs:
           ./scripts/feeds install -a
 
       # ==========================================
-      # 5. Validate and Inject Device Files
+      # 5. Check and Inject Device Files
       # ==========================================
       - name: Inject Custom Board Map & Settings
         run: |
           set -eu
 
-          echo "=== Repository device files ==="
+          echo "===== Repository DTS files ====="
 
           find target/linux/ipq40xx -type f \
-            \( -name  *.dts  -o -name  *.dtsi  -o -name  *.mk  \) \
+            \( -name  *.dts  -o -name  *.dtsi  \) \
             -print || true
 
-          echo "=== Locate GAPD-7200 DTS ==="
+          echo "===== Locate GAPD-7200 DTS ====="
 
           DTS_FILE="$(find target/linux/ipq40xx -type f \
-            -name  qcom-ipq4019-gapd7200.dts  -print -quit)"
+            -name  qcom-ipq4019-gapd7200.dts  \
+            -print -quit)"
 
           if [ -z "$DTS_FILE" ]; then
             echo "ERROR: qcom-ipq4019-gapd7200.dts was not found."
-            echo "Check the DTS filename in the repository."
+            echo "Check the actual DTS filename in the repository."
             exit 1
           fi
 
-          echo "Using DTS: $DTS_FILE"
+          echo "DTS file: $DTS_FILE"
 
           DTS_DEST="openwrt/target/linux/ipq40xx/files/arch/arm/boot/dts"
 
           mkdir -p "$DTS_DEST"
-
           cp "$DTS_FILE" "$DTS_DEST/"
 
-          echo "=== Copy custom files ==="
+          echo "===== Copy custom overlay files ====="
 
           if [ -d files ]; then
             mkdir -p openwrt/files
             cp -a files/. openwrt/files/
           else
-            echo "No repository files/ overlay found."
+            echo "No custom files/ directory found."
           fi
 
-          echo "=== Inject device image definition ==="
+          echo "===== Check image definition ====="
 
           if [ ! -f src/generic-extra.mk ]; then
             echo "ERROR: src/generic-extra.mk was not found."
@@ -126,20 +127,20 @@ jobs:
           if grep -q  Device/davolink_gapd-7200  \
             openwrt/target/linux/ipq40xx/image/generic.mk; then
             echo "ERROR: Device definition already exists upstream."
-            echo "Avoid defining the same device twice."
+            echo "Do not append a duplicate device definition."
             exit 1
           fi
 
           cat src/generic-extra.mk \
             >> openwrt/target/linux/ipq40xx/image/generic.mk
 
-          echo "=== Verify injected definition ==="
+          echo "===== Verify device definition ====="
 
           grep -n -A20 -B2 \
              Device/davolink_gapd-7200  \
             openwrt/target/linux/ipq40xx/image/generic.mk
 
-          echo "=== Verify DTS destination ==="
+          echo "===== Verify copied DTS ====="
 
           ls -lh "$DTS_DEST"
 
@@ -170,51 +171,52 @@ jobs:
 
           make defconfig
 
-          echo "=== Verify target configuration ==="
+          echo "===== Verify device configuration ====="
 
           grep -E \
-             CONFIG_TARGET_ipq40xx|CONFIG_PACKAGE_luci|davolink  \
+             CONFIG_TARGET_ipq40xx|davolink|CONFIG_PACKAGE_luci  \
             .config || true
 
           if ! grep -q \
              ^CONFIG_TARGET_ipq40xx_generic_DEVICE_davolink_gapd-7200=y$  \
             .config; then
-            echo "ERROR: The Davolink device profile was removed by make defconfig."
-            echo "The device definition may not be registered correctly."
+            echo "ERROR: Davolink device profile was removed by make defconfig."
+            echo "Check target profile registration."
             exit 1
           fi
 
       # ==========================================
-      # 7. Verify Image Definition Before Build
+      # 7. Validate DTS and Image Definition
       # ==========================================
-      - name: Validate Device Image Definition
+      - name: Validate Device Definition
         run: |
           set -eu
 
-          echo "=== Device definition ==="
+          echo "===== Device image definition ====="
 
           grep -n -A20 -B2 \
              Device/davolink_gapd-7200  \
             openwrt/target/linux/ipq40xx/image/generic.mk
 
-          echo "=== Image generation helpers ==="
+          echo "===== Relevant image helpers ====="
 
-          grep -n -E \
+          grep -R -n -E \
              define Device/FitImageLzma|define Device/FitImage|append-kernel|append-rootfs|append-metadata  \
-            openwrt/target/linux/ipq40xx/image/generic.mk \
-            openwrt/target/linux/ipq40xx/image/*.mk || true
+            openwrt/target/linux/ipq40xx/image \
+            || true
 
-          echo "=== Device tree ==="
+          echo "===== GAPD-7200 device files ====="
 
           find openwrt/target/linux/ipq40xx/files \
-            -type f -name  *gapd7200*  -print
+            -type f -iname  *gapd7200*  -print
 
       # ==========================================
-      # 8. Compile Firmware
+      # 8. Compile Firmware and Save Full Log
       # ==========================================
       - name: Compile Custom Firmware
         id: compile
         continue-on-error: true
+        shell: bash
         run: |
           cd openwrt
 
@@ -223,24 +225,33 @@ jobs:
           make -j1 V=s 2>&1 | tee build.log
 
       # ==========================================
-      # 9. Diagnose Build Results
+      # 9. Print Actual Build Errors
       # ==========================================
-      - name: Debug Build Results
+      - name: Show Build Errors
         if: always()
+        shell: bash
         run: |
           echo "======================================"
-          echo "BUILD RESULT"
+          echo "BUILD DIAGNOSTICS"
           echo "======================================"
 
-          echo "=== Build directory ==="
+          echo "===== Build log status ====="
 
-          if [ -d openwrt/build_dir ]; then
-            echo "build_dir exists"
+          if [ ! -f openwrt/build.log ]; then
+            echo "Build log not found."
           else
-            echo "build_dir does not exist"
+            echo "===== Error messages ====="
+
+            grep -n -i -E \
+               error:|Error [0-9]+|failed|No such file|cannot stat|undefined reference|recipe for target|unary operator expected|target/linux failed  \
+              openwrt/build.log | tail -100 || true
+
+            echo "===== Last 100 lines ====="
+
+            tail -100 openwrt/build.log
           fi
 
-          echo "=== GAPD kernel and DTB files ==="
+          echo "===== Kernel and DTB files ====="
 
           find openwrt/build_dir -type f \
             \( -iname  *gapd*kernel*  \
@@ -248,27 +259,13 @@ jobs:
                -o -iname  *gapd*.itb  \) \
             -print 2>/dev/null || true
 
-          echo "=== Generated target images ==="
+          echo "===== Generated target files ====="
 
           find openwrt/bin/targets -type f \
             -print 2>/dev/null || true
 
-          echo "=== Relevant build errors ==="
-
-          if [ -f openwrt/build.log ]; then
-            grep -n -i -E \
-               error:|no such file|undefined|failed to build|cannot stat|unary operator expected|Error [0-9]  \
-              openwrt/build.log | tail -100 || true
-
-            echo "=== Last 100 lines of build log ==="
-
-            tail -100 openwrt/build.log
-          else
-            echo "Build log was not created."
-          fi
-
       # ==========================================
-      # 10. Upload Firmware Artifacts
+      # 10. Upload Firmware Files
       # ==========================================
       - name: Upload Custom Firmware
         if: always()
@@ -297,7 +294,7 @@ jobs:
           retention-days: 30
 
       # ==========================================
-      # 12. Fail Workflow if Compilation Failed
+      # 12. Report Final Build Status
       # ==========================================
       - name: Check Compilation Status
         if: always()
@@ -306,7 +303,7 @@ jobs:
         run: |
           if [ "$COMPILE_OUTCOME" != "success" ]; then
             echo "ERROR: OpenWrt compilation failed."
-            echo "Download the Build Logs artifact to inspect the failure."
+            echo "Download the Build Logs artifact."
             exit 1
           fi
 
